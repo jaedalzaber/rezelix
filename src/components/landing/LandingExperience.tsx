@@ -35,57 +35,95 @@ const clamp01 = (value: number) => THREE.MathUtils.clamp(value, 0, 1)
 const sectionProgress = (value: number, start: number, end: number) =>
   clamp01((value - start) / (end - start))
 
+const smoothProgress = (value: number, start: number, end: number) => {
+  const t = sectionProgress(value, start, end)
+  return t * t * (3 - 2 * t)
+}
+
 const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
-  const blueprintRef = React.useRef<THREE.Mesh>(null)
+  const houseRef = React.useRef<THREE.Group>(null)
+  const exteriorRef = React.useRef<THREE.Group>(null)
+  const blueprintRef = React.useRef<THREE.Group>(null)
   const blueprintMaterialRef = React.useRef<THREE.MeshBasicMaterial>(null)
-  const shellRef = React.useRef<THREE.Mesh>(null)
+  const blueprintFloorMaterialRef = React.useRef<THREE.MeshBasicMaterial>(null)
   const shellMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
+  const rightWingMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
+  const leftWingMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
+  const roofMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
+  const glassMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
   const landscapeRef = React.useRef<THREE.Group>(null)
   const interiorRef = React.useRef<THREE.Group>(null)
   const productRef = React.useRef<THREE.Mesh>(null)
   const productMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const targetCamera = React.useRef(new THREE.Vector3(0, 2.6, 10))
-  const lookAtPoint = React.useRef(new THREE.Vector3(0, 1.2, 0))
+  const interiorFloorMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
+  const interiorCeilingMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
+  const lookAtMatrixRef = React.useRef(new THREE.Matrix4())
+  const targetQuaternionRef = React.useRef(new THREE.Quaternion())
+  const targetCamera = React.useRef(new THREE.Vector3(0.25, 2.25, 13.3))
+  const lookAtPoint = React.useRef(new THREE.Vector3(0, 1.4, 0))
+  const currentLookAtRef = React.useRef(new THREE.Vector3(0, 1.4, 0))
 
   useFrame((state) => {
     const progress = progressRef.current
-    const phase2 = sectionProgress(progress, 0.1, 0.3)
-    const phase3 = sectionProgress(progress, 0.28, 0.43)
-    const phase4 = sectionProgress(progress, 0.44, 0.56)
-    const phase6 = sectionProgress(progress, 0.57, 0.72)
-    const phase7 = sectionProgress(progress, 0.72, 0.8)
-    const phase8 = sectionProgress(progress, 0.8, 0.9)
-    const phase9 = sectionProgress(progress, 0.9, 1)
+    const intro = sectionProgress(progress, 0, 0.16)
+    const phase2 = sectionProgress(progress, 0.16, 0.34)
+    const phase3 = sectionProgress(progress, 0.34, 0.5)
+    const phase4 = sectionProgress(progress, 0.5, 0.62)
+    const phase6 = sectionProgress(progress, 0.62, 0.76)
+    const phase7 = sectionProgress(progress, 0.76, 0.84)
+    const phase8 = sectionProgress(progress, 0.84, 0.92)
+    const phase9 = sectionProgress(progress, 0.92, 1)
 
-    const wireOpacity = 1 - phase2
+    const exteriorOpacity = clamp01(Math.max(1 - intro, phase2))
+    const blueprintOpacity = clamp01(intro * (1 - phase2 * 0.9))
+
+    if (houseRef.current) {
+      houseRef.current.position.y = -1.28
+    }
+
+    if (exteriorRef.current) {
+      const buildScale = progress < 0.16 ? 1 : Math.max(0.08, phase2)
+      exteriorRef.current.scale.set(1, buildScale, 1)
+      exteriorRef.current.position.y = (1 - exteriorOpacity) * 0.22
+    }
+
+    if (shellMaterialRef.current) shellMaterialRef.current.opacity = exteriorOpacity
+    if (rightWingMaterialRef.current) rightWingMaterialRef.current.opacity = exteriorOpacity
+    if (leftWingMaterialRef.current) leftWingMaterialRef.current.opacity = exteriorOpacity
+    if (roofMaterialRef.current) roofMaterialRef.current.opacity = exteriorOpacity
+    if (glassMaterialRef.current) glassMaterialRef.current.opacity = exteriorOpacity * 0.95
+
+    if (blueprintRef.current) {
+      blueprintRef.current.position.y = -1.32
+      blueprintRef.current.scale.setScalar(0.9 + blueprintOpacity * 0.1)
+    }
     if (blueprintMaterialRef.current) {
-      blueprintMaterialRef.current.opacity = wireOpacity
+      blueprintMaterialRef.current.opacity = blueprintOpacity
       blueprintMaterialRef.current.needsUpdate = true
     }
-
-    if (shellRef.current) {
-      shellRef.current.scale.set(1, Math.max(0.08, phase2), 1)
-      shellRef.current.position.y = 0.2 + shellRef.current.scale.y * 1.6
-    }
-
-    if (shellMaterialRef.current) {
-      shellMaterialRef.current.opacity = Math.min(1, phase2 + 0.15)
+    if (blueprintFloorMaterialRef.current) {
+      blueprintFloorMaterialRef.current.opacity = blueprintOpacity * 0.55
+      blueprintFloorMaterialRef.current.needsUpdate = true
     }
 
     if (landscapeRef.current) {
       const landscapeScale = Math.max(0.01, phase3)
       landscapeRef.current.scale.setScalar(landscapeScale)
-      landscapeRef.current.position.y = -0.25 + phase3 * 0.25
+      landscapeRef.current.position.y = -0.3 + phase3 * 0.24
     }
 
     if (interiorRef.current) {
       const interiorScale = Math.max(0.01, phase6)
       interiorRef.current.scale.setScalar(interiorScale)
-      interiorRef.current.position.y = 0.2 + phase6 * 0.5
+      interiorRef.current.position.y = 0.25 + phase6 * 0.35
     }
+    if (interiorFloorMaterialRef.current) interiorFloorMaterialRef.current.opacity = clamp01(phase6)
+    if (interiorCeilingMaterialRef.current)
+      interiorCeilingMaterialRef.current.opacity = clamp01(phase6 * 0.8)
 
     if (productRef.current) {
-      productRef.current.scale.setScalar(0.4 + phase7 * 0.8)
+      const productVisibility = clamp01(phase7 * 1.2 + phase8 * 0.6)
+      productRef.current.scale.setScalar(0.16 + productVisibility * 1.04)
       productRef.current.rotation.y += 0.01 + phase8 * 0.025
     }
 
@@ -93,22 +131,53 @@ const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
       productMaterialRef.current.emissiveIntensity = phase7 * 0.8
     }
 
-    if (progress < 0.45) {
-      targetCamera.current.set(0, 2.8, 10 - progress * 6)
-      lookAtPoint.current.set(0, 1.3, 0)
-    } else if (progress < 0.75) {
-      targetCamera.current.set(-2.1, 1.8, 5.7 - phase6 * 1.8)
-      lookAtPoint.current.set(-1.9, 1.4, -0.8)
-    } else if (progress < 0.9) {
-      targetCamera.current.set(-1.4, 1.8, 3.2)
-      lookAtPoint.current.set(-2.2 + phase8 * 0.8, 1.4, -1.2)
+    if (progress < 0.34) {
+      const t = smoothProgress(progress, 0, 0.34)
+      targetCamera.current.set(
+        THREE.MathUtils.lerp(0.25, 0.0, t),
+        THREE.MathUtils.lerp(2.25, 10, t),
+        THREE.MathUtils.lerp(13.3, 12.3, t),
+      )
+      lookAtPoint.current.set(0, THREE.MathUtils.lerp(1.4, 0, t), 0)
+    } else if (progress < 0.5) {
+      const t = smoothProgress(progress, 0.34, 0.5)
+      targetCamera.current.set(
+        THREE.MathUtils.lerp(0.0, 0.9, t),
+        THREE.MathUtils.lerp(10, 0.1, t),
+        12.3,
+      )
+      lookAtPoint.current.set(0, 0, 0)
+    } else if (progress < 0.76) {
+      targetCamera.current.set(-2.35, 1.85, 5.1 - phase6 * 1.5)
+      lookAtPoint.current.set(-2.05, 0.95, -1)
+    } else if (progress < 0.84) {
+      targetCamera.current.set(-1.3, 1.78, 2.75 - phase7 * 0.65)
+      lookAtPoint.current.set(-2.1, 0.95, -1)
+    } else if (progress < 0.92) {
+      const orbitAngle = phase8 * Math.PI * 2
+      const orbitRadius = 3.1
+      targetCamera.current.set(
+        -2.1 + Math.cos(orbitAngle) * orbitRadius,
+        1.95,
+        -1 + Math.sin(orbitAngle) * orbitRadius,
+      )
+      lookAtPoint.current.set(-2.1, 0.95, -1)
     } else {
-      targetCamera.current.set(0.5 + phase9 * 7, 3.2, 4.5 + phase9 * 8)
-      lookAtPoint.current.set(0, 1.2, 0)
+      targetCamera.current.set(0.8 + phase9 * 7.8, 3.2, 5.6 + phase9 * 8.5)
+      lookAtPoint.current.set(0, 0.22, 0)
     }
 
     state.camera.position.lerp(targetCamera.current, 0.07)
-    state.camera.lookAt(lookAtPoint.current)
+    currentLookAtRef.current.lerp(lookAtPoint.current, 0.07)
+
+    const camera = state.camera as THREE.Camera & THREE.Object3D
+    if (typeof camera.lookAt === 'function') {
+      camera.lookAt(currentLookAtRef.current)
+    } else {
+      lookAtMatrixRef.current.lookAt(camera.position, currentLookAtRef.current, camera.up)
+      targetQuaternionRef.current.setFromRotationMatrix(lookAtMatrixRef.current)
+      camera.quaternion.slerp(targetQuaternionRef.current, 0.2)
+    }
   })
 
   return (
@@ -125,63 +194,141 @@ const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
         <meshStandardMaterial color="#ffffff" roughness={0.95} metalness={0.05} />
       </mesh>
 
-      <mesh ref={blueprintRef} position={[0, 1.95, 0]}>
-        <boxGeometry args={[4.5, 3.5, 4]} />
-        <meshBasicMaterial ref={blueprintMaterialRef} color="#6bd5ff" transparent opacity={1} wireframe />
-      </mesh>
+      <group ref={houseRef} position={[0, -0.95, 0]}>
+        <group ref={blueprintRef}>
+          <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[8.6, 6.6]} />
+            <meshBasicMaterial
+              ref={blueprintFloorMaterialRef}
+              color="#78b8cf"
+              transparent
+              opacity={0}
+            />
+          </mesh>
+          <mesh position={[0, 1.85, 0]}>
+            <boxGeometry args={[4.5, 3.35, 4]} />
+            <meshBasicMaterial
+              ref={blueprintMaterialRef}
+              color="#4ea0be"
+              transparent
+              opacity={0}
+              wireframe
+            />
+          </mesh>
+        </group>
 
-      <mesh ref={shellRef} position={[0, 0.2, 0]} castShadow>
-        <boxGeometry args={[4.2, 3.2, 3.6]} />
-        <meshStandardMaterial
-          ref={shellMaterialRef}
-          color="#d6d2cb"
-          roughness={0.58}
-          metalness={0.08}
-          transparent
-        />
-      </mesh>
+        <group ref={exteriorRef}>
+          <mesh position={[0, 1.58, 0]} castShadow>
+            <boxGeometry args={[4.25, 3.16, 3.6]} />
+            <meshStandardMaterial
+              ref={shellMaterialRef}
+              color="#d8d4cb"
+              roughness={0.6}
+              metalness={0.08}
+              transparent
+              opacity={1}
+            />
+          </mesh>
+          <mesh position={[2.95, 0.95, 0.15]} castShadow>
+            <boxGeometry args={[2.1, 1.9, 2.5]} />
+            <meshStandardMaterial
+              ref={rightWingMaterialRef}
+              color="#c98254"
+              roughness={0.65}
+              metalness={0.06}
+              transparent
+              opacity={1}
+            />
+          </mesh>
+          <mesh position={[-2.75, 0.95, 0.2]} castShadow>
+            <boxGeometry args={[1.95, 1.9, 2.6]} />
+            <meshStandardMaterial
+              ref={leftWingMaterialRef}
+              color="#b6b0a6"
+              roughness={0.63}
+              metalness={0.05}
+              transparent
+              opacity={1}
+            />
+          </mesh>
+          <mesh position={[0.2, 3.22, 0]}>
+            <boxGeometry args={[4.5, 0.12, 4]} />
+            <meshStandardMaterial
+              ref={roofMaterialRef}
+              color="#45484f"
+              roughness={0.8}
+              metalness={0.15}
+              transparent
+              opacity={1}
+            />
+          </mesh>
+          <mesh position={[0, 1.55, 1.82]}>
+            <planeGeometry args={[3.6, 2.5]} />
+            <meshStandardMaterial
+              ref={glassMaterialRef}
+              color="#9ec6d8"
+              roughness={0.1}
+              metalness={0.3}
+              transparent
+              opacity={0.78}
+            />
+          </mesh>
+        </group>
 
-      <group ref={landscapeRef}>
-        <mesh position={[-4, 0.35, -3]}>
-          <coneGeometry args={[0.5, 1.2, 12]} />
-          <meshStandardMaterial color="#4ca66d" roughness={0.9} />
-        </mesh>
-        <mesh position={[-2.8, 0.35, -3.5]}>
-          <coneGeometry args={[0.45, 1, 12]} />
-          <meshStandardMaterial color="#5bbb73" roughness={0.9} />
-        </mesh>
-        <mesh position={[3.7, 0.3, -3.2]}>
-          <coneGeometry args={[0.55, 1.4, 12]} />
-          <meshStandardMaterial color="#4a9b67" roughness={0.9} />
-        </mesh>
-        <mesh position={[0, 0.03, 4.6]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[3.8, 1.9]} />
-          <meshStandardMaterial color="#2f353f" roughness={0.95} />
+        <group ref={landscapeRef}>
+          <mesh position={[-4, 0.35, -3]}>
+            <coneGeometry args={[0.5, 1.2, 12]} />
+            <meshStandardMaterial color="#4ca66d" roughness={0.9} />
+          </mesh>
+          <mesh position={[-2.8, 0.35, -3.5]}>
+            <coneGeometry args={[0.45, 1, 12]} />
+            <meshStandardMaterial color="#5bbb73" roughness={0.9} />
+          </mesh>
+          <mesh position={[3.7, 0.3, -3.2]}>
+            <coneGeometry args={[0.55, 1.4, 12]} />
+            <meshStandardMaterial color="#4a9b67" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.03, 4.6]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[3.8, 1.9]} />
+            <meshStandardMaterial color="#dadde1" roughness={0.95} />
+          </mesh>
+        </group>
+
+        <group ref={interiorRef} position={[-2.1, 1, -1]}>
+          <mesh position={[0, 0.6, 0]}>
+            <boxGeometry args={[2.2, 1.2, 1.4]} />
+            <meshStandardMaterial
+              ref={interiorFloorMaterialRef}
+              color="#efebe5"
+              roughness={0.55}
+              transparent
+              opacity={0}
+            />
+          </mesh>
+          <mesh position={[0, 1.35, -0.6]}>
+            <boxGeometry args={[2.2, 0.06, 1.4]} />
+            <meshStandardMaterial
+              ref={interiorCeilingMaterialRef}
+              color="#baad9b"
+              roughness={0.85}
+              transparent
+              opacity={0}
+            />
+          </mesh>
+        </group>
+
+        <mesh ref={productRef} position={[-2.1, 1.15, -1]} castShadow>
+          <icosahedronGeometry args={[0.38, 0]} />
+          <meshStandardMaterial
+            ref={productMaterialRef}
+            color="#d7c7a0"
+            emissive="#fff1cc"
+            emissiveIntensity={0}
+            roughness={0.2}
+            metalness={0.78}
+          />
         </mesh>
       </group>
-
-      <group ref={interiorRef} position={[-2.1, 1, -1]}>
-        <mesh position={[0, 0.6, 0]}>
-          <boxGeometry args={[2.2, 1.2, 1.4]} />
-          <meshStandardMaterial color="#efebe5" roughness={0.55} />
-        </mesh>
-        <mesh position={[0, 1.35, -0.6]}>
-          <boxGeometry args={[2.2, 0.06, 1.4]} />
-          <meshStandardMaterial color="#baad9b" roughness={0.85} />
-        </mesh>
-      </group>
-
-      <mesh ref={productRef} position={[-2.1, 1.15, -1]} castShadow>
-        <icosahedronGeometry args={[0.38, 0]} />
-        <meshStandardMaterial
-          ref={productMaterialRef}
-          color="#d7c7a0"
-          emissive="#fff1cc"
-          emissiveIntensity={0}
-          roughness={0.2}
-          metalness={0.78}
-        />
-      </mesh>
     </>
   )
 }
@@ -245,53 +392,74 @@ export const LandingExperience: React.FC<LandingExperienceProps> = ({
   return (
     <div className="landing-root relative min-h-[600vh] text-slate-900" ref={pageRef}>
       <div className="pointer-events-none fixed inset-0 -z-10">
-        <Canvas camera={{ fov: 44, position: [0, 2.6, 10] }} dpr={[1, 1.5]}>
+        <Canvas camera={{ fov: 44, position: [0.25, 2.25, 13.3] }} dpr={[1, 1.5]}>
           <HouseScene progressRef={progressRef} />
         </Canvas>
       </div>
 
-      <header className="fixed left-0 right-0 top-0 z-30 border-b border-black/10 bg-white/75 backdrop-blur-xl">
+      <header className="fixed left-0 right-0 top-0 z-30 bg-white/80 backdrop-blur-xl">
         <div className="container flex h-20 items-center justify-between">
-          <a className="text-lg font-semibold uppercase tracking-[0.24em] text-slate-900" href="#top">
-            rezeliz
-          </a>
+          <div className="flex items-center gap-5">
+            <a
+              className="text-3xl font-semibold leading-none text-slate-800 md:text-4xl"
+              href="#top"
+            >
+              Rezelix
+            </a>
+            <div className="hidden h-8 w-px bg-black/10 md:block" />
+            <nav className="hidden items-center gap-8 md:flex">
+              {navItems.map((item) => (
+                <a
+                  className="text-sm font-medium text-slate-500 transition hover:text-slate-900"
+                  href={item.href}
+                  key={item.href}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          </div>
 
-          <nav className="hidden items-center gap-8 md:flex">
-            {navItems.map((item) => (
-              <a
-                className="text-sm uppercase tracking-[0.18em] text-slate-700 transition hover:text-slate-950"
-                href={item.href}
-                key={item.href}
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          <Button asChild className="rounded-full bg-slate-900 px-6 text-white hover:bg-slate-800">
-            <a href="#contact">Get in Touch</a>
+          <Button
+            asChild
+            variant="outline"
+            className="rounded-full border-black/15 bg-white px-6 text-slate-900 hover:bg-slate-50"
+          >
+            <a href="#contact">Get in Touch {'->'}</a>
           </Button>
         </div>
       </header>
 
       <main className="relative z-10">
         <section
-          className="container flex min-h-screen flex-col justify-center gap-8 pt-28 md:pt-36"
+          className="container flex min-h-screen flex-col items-center justify-start pt-40 md:pt-28"
           id="top"
         >
-          <p className="max-w-2xl text-xs uppercase tracking-[0.28em] text-sky-700">
-            Architectural Design Studio
-          </p>
-          <h1 className="max-w-4xl text-4xl font-semibold leading-tight md:text-6xl">{heroTitle}</h1>
-          <p className="max-w-2xl text-base text-slate-700 md:text-lg">{heroSubtitle}</p>
-          <div className="flex items-center gap-4">
-            <Button asChild className="rounded-full bg-slate-900 px-7 text-white hover:bg-slate-800">
-              <a href={heroCtaHref}>{heroCtaLabel}</a>
-            </Button>
-            <span className="text-sm uppercase tracking-[0.18em] text-slate-600">
-              Scroll to build the house
-            </span>
+          <div className="flex w-full max-w-4xl flex-col items-center text-center">
+            <h1 className="text-5xl font-medium leading-tight tracking-tight text-black md:text-6xl">
+              {heroTitle}
+            </h1>
+            <p className="mt-4 max-w-3xl text-base text-black md:text-lg">{heroSubtitle}</p>
+            <div className="mt-8 flex items-center gap-3">
+              <Button
+                asChild
+                className="rounded-md bg-black px-10 text-white hover:bg-slate-700"
+              >
+                <a href={heroCtaHref}>
+                  {heroCtaLabel} {'->'}
+                </a>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="rounded-md border-black/15 bg-white px-10 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+              >
+                <a href="#portfolio">Portfolio</a>
+              </Button>
+            </div>
           </div>
+
+          <div className="h-[62vh] w-full md:h-[66vh]" />
         </section>
 
         <section className="container flex min-h-screen items-center" id="services">
@@ -338,11 +506,14 @@ export const LandingExperience: React.FC<LandingExperienceProps> = ({
               Ready to shape your next space?
             </h2>
             <p className="mt-4 text-slate-700">
-              We can turn your concept into a full visual and technical package from planning to final
-              walkthrough.
+              We can turn your concept into a full visual and technical package from planning to
+              final walkthrough.
             </p>
             <div className="mt-8">
-              <Button asChild className="rounded-full bg-slate-900 px-8 text-white hover:bg-slate-800">
+              <Button
+                asChild
+                className="rounded-full bg-slate-900 px-8 text-white hover:bg-slate-800"
+              >
                 <Link href="/contact">Get in Touch</Link>
               </Button>
             </div>
