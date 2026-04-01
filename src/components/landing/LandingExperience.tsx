@@ -42,8 +42,10 @@ const smoothProgress = (value: number, start: number, end: number) => {
 
 const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
   const houseRef = React.useRef<THREE.Group>(null)
-  const exteriorRef = React.useRef<THREE.Group>(null)
-  const wireframeMaterialRef = React.useRef<THREE.MeshBasicMaterial | null>(null)
+  const solidRef = React.useRef<THREE.Group>(null)
+  const wireRef = React.useRef<THREE.Group>(null)
+  const solidMaterialsRef = React.useRef<THREE.Material[]>([])
+  const wireMaterialsRef = React.useRef<THREE.Material[]>([])
   const lookAtMatrixRef = React.useRef(new THREE.Matrix4())
   const targetQuaternionRef = React.useRef(new THREE.Quaternion())
   const targetCamera = React.useRef(new THREE.Vector3(0.25, 2.25, 13.3))
@@ -51,50 +53,104 @@ const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
   const currentLookAtRef = React.useRef(new THREE.Vector3(0, 1.4, 0))
   const modelScene = useGLTF('/model.glb')
 
-  const exteriorModel = React.useMemo(() => {
-    const clone = modelScene.scene.clone(true)
-    const box = new THREE.Box3().setFromObject(clone)
+  const normalizedTransform = React.useMemo(() => {
+    const probe = modelScene.scene.clone(true)
+    const box = new THREE.Box3().setFromObject(probe)
     const size = new THREE.Vector3()
-    const center = new THREE.Vector3()
 
     box.getSize(size)
-    box.getCenter(center)
-
-    clone.position.set(-1, -2, 0)
 
     const footprint = Math.max(size.x, size.z) || 1
     const scale = 16 / footprint
 
-    return { clone, scale }
+    return { scale }
+  }, [modelScene.scene])
+
+  const solidModel = React.useMemo(() => {
+    const clone = modelScene.scene.clone(true)
+    clone.position.set(-1, -2, 0)
+    return clone
+  }, [modelScene.scene])
+
+  const wireModel = React.useMemo(() => {
+    const clone = modelScene.scene.clone(true)
+    clone.position.set(-1, -2, 0)
+    return clone
   }, [modelScene.scene])
 
   React.useEffect(() => {
-    const wireMaterial = new THREE.MeshBasicMaterial({
-      color: '#111111',
-      transparent: true,
-      opacity: 1,
-      wireframe: true,
-    })
-    wireframeMaterialRef.current = wireMaterial
+    const solidMaterials: THREE.Material[] = []
+    const wireMaterials: THREE.Material[] = []
 
-    exteriorModel.clone.traverse((object) => {
+    solidModel.traverse((object) => {
       const mesh = object as THREE.Mesh
       if (!mesh.isMesh) return
 
       mesh.castShadow = false
       mesh.receiveShadow = false
-      mesh.material = wireMaterial
+
+      if (Array.isArray(mesh.material)) {
+        const clonedMaterials = mesh.material.map((material) => {
+          const next = material.clone()
+          next.transparent = true
+          next.opacity = 1
+          solidMaterials.push(next)
+          return next
+        })
+        mesh.material = clonedMaterials
+      } else {
+        const next = mesh.material.clone()
+        next.transparent = true
+        next.opacity = 1
+        mesh.material = next
+        solidMaterials.push(next)
+      }
     })
 
+    wireModel.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      if (!mesh.isMesh) return
+
+      mesh.castShadow = false
+      mesh.receiveShadow = false
+
+      if (Array.isArray(mesh.material)) {
+        const wireMeshMaterials = mesh.material.map(() => {
+          const mat = new THREE.MeshBasicMaterial({
+            color: '#111111',
+            transparent: true,
+            opacity: 0,
+            wireframe: true,
+          })
+          wireMaterials.push(mat)
+          return mat
+        })
+        mesh.material = wireMeshMaterials
+      } else {
+        const mat = new THREE.MeshBasicMaterial({
+          color: '#111111',
+          transparent: true,
+          opacity: 0,
+          wireframe: true,
+        })
+        mesh.material = mat
+        wireMaterials.push(mat)
+      }
+    })
+
+    solidMaterialsRef.current = solidMaterials
+    wireMaterialsRef.current = wireMaterials
+
     return () => {
-      wireMaterial.dispose()
-      wireframeMaterialRef.current = null
+      solidMaterials.forEach((material) => material.dispose())
+      wireMaterials.forEach((material) => material.dispose())
+      solidMaterialsRef.current = []
+      wireMaterialsRef.current = []
     }
-  }, [exteriorModel])
+  }, [solidModel, wireModel])
 
   useFrame((state) => {
     const progress = progressRef.current
-    const phase2 = sectionProgress(progress, 0.16, 0.34)
     const phase6 = sectionProgress(progress, 0.62, 0.76)
     const phase7 = sectionProgress(progress, 0.76, 0.84)
     const phase8 = sectionProgress(progress, 0.84, 0.92)
@@ -104,17 +160,37 @@ const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
       houseRef.current.position.set(0, 0, 0)
     }
 
-    if (exteriorRef.current) {
-      exteriorRef.current.position.set(0, 0, 0)
-      exteriorRef.current.scale.set(1, 1, 1)
+    if (solidRef.current) {
+      solidRef.current.position.set(0, 0, 0)
+      solidRef.current.scale.set(1, 1, 1)
+    }
+    if (wireRef.current) {
+      wireRef.current.position.set(0, 0, 0)
+      wireRef.current.scale.set(1, 1, 1)
     }
 
-    if (wireframeMaterialRef.current) {
-      wireframeMaterialRef.current.opacity = 1
-      wireframeMaterialRef.current.needsUpdate = true
+    const wireIn = smoothProgress(progress, 0.14, 0.2)
+    const wireOut = 1 - smoothProgress(progress, 0.3, 0.36)
+    const wireMix = clamp01(Math.min(wireIn, wireOut))
+    const solidMix = 1 - wireMix
+
+    solidMaterialsRef.current.forEach((material) => {
+      material.opacity = solidMix
+      material.needsUpdate = true
+    })
+    wireMaterialsRef.current.forEach((material) => {
+      material.opacity = wireMix
+      material.needsUpdate = true
+    })
+
+    if (solidRef.current) {
+      solidRef.current.visible = solidMix > 0.001
+    }
+    if (wireRef.current) {
+      wireRef.current.visible = wireMix > 0.001
     }
 
-    if (progress < 0.34) {
+    if (progress < 0.04) {
       const t = smoothProgress(progress, 0, 0.34)
       targetCamera.current.set(
         THREE.MathUtils.lerp(0.25, 0.0, t),
@@ -122,7 +198,17 @@ const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
         THREE.MathUtils.lerp(13.3, 12.3, t),
       )
       lookAtPoint.current.set(0, THREE.MathUtils.lerp(1.4, 0, t), 0)
-    } else if (progress < 0.5) {
+    } 
+    else if (progress < 0.34) {
+      const t = smoothProgress(progress, 0, 0.34)
+      targetCamera.current.set(
+        THREE.MathUtils.lerp(10.25, 1.0, t),
+        THREE.MathUtils.lerp(2.25, 10, t),
+        THREE.MathUtils.lerp(13.3, 12.3, t),
+      )
+      lookAtPoint.current.set(0, THREE.MathUtils.lerp(1.4, 0, t), 0)
+    } 
+    else if (progress < 0.5) {
       const t = smoothProgress(progress, 0.34, 0.5)
       targetCamera.current.set(
         THREE.MathUtils.lerp(0.0, 0.9, t),
@@ -173,8 +259,11 @@ const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
       <Environment preset="city" />
 
       <group ref={houseRef} position={[0, 0, 0]}>
-        <group ref={exteriorRef}>
-          <primitive object={exteriorModel.clone} scale={exteriorModel.scale} />
+        <group ref={solidRef}>
+          <primitive object={solidModel} scale={normalizedTransform.scale} />
+        </group>
+        <group ref={wireRef}>
+          <primitive object={wireModel} scale={normalizedTransform.scale} />
         </group>
       </group>
     </>
