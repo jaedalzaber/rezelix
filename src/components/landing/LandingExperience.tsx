@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { useGSAP } from '@gsap/react'
-import { Environment } from '@react-three/drei'
+import { Environment, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -43,92 +43,75 @@ const smoothProgress = (value: number, start: number, end: number) => {
 const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
   const houseRef = React.useRef<THREE.Group>(null)
   const exteriorRef = React.useRef<THREE.Group>(null)
-  const blueprintRef = React.useRef<THREE.Group>(null)
-  const blueprintMaterialRef = React.useRef<THREE.MeshBasicMaterial>(null)
-  const blueprintFloorMaterialRef = React.useRef<THREE.MeshBasicMaterial>(null)
-  const shellMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const rightWingMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const leftWingMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const roofMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const glassMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const landscapeRef = React.useRef<THREE.Group>(null)
-  const interiorRef = React.useRef<THREE.Group>(null)
-  const productRef = React.useRef<THREE.Mesh>(null)
-  const productMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const interiorFloorMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
-  const interiorCeilingMaterialRef = React.useRef<THREE.MeshStandardMaterial>(null)
+  const wireframeMaterialRef = React.useRef<THREE.MeshBasicMaterial | null>(null)
   const lookAtMatrixRef = React.useRef(new THREE.Matrix4())
   const targetQuaternionRef = React.useRef(new THREE.Quaternion())
   const targetCamera = React.useRef(new THREE.Vector3(0.25, 2.25, 13.3))
   const lookAtPoint = React.useRef(new THREE.Vector3(0, 1.4, 0))
   const currentLookAtRef = React.useRef(new THREE.Vector3(0, 1.4, 0))
+  const modelScene = useGLTF('/model.glb')
+
+  const exteriorModel = React.useMemo(() => {
+    const clone = modelScene.scene.clone(true)
+    const box = new THREE.Box3().setFromObject(clone)
+    const size = new THREE.Vector3()
+    const center = new THREE.Vector3()
+
+    box.getSize(size)
+    box.getCenter(center)
+
+    clone.position.set(-1, -2, 0)
+
+    const footprint = Math.max(size.x, size.z) || 1
+    const scale = 16 / footprint
+
+    return { clone, scale }
+  }, [modelScene.scene])
+
+  React.useEffect(() => {
+    const wireMaterial = new THREE.MeshBasicMaterial({
+      color: '#111111',
+      transparent: true,
+      opacity: 1,
+      wireframe: true,
+    })
+    wireframeMaterialRef.current = wireMaterial
+
+    exteriorModel.clone.traverse((object) => {
+      const mesh = object as THREE.Mesh
+      if (!mesh.isMesh) return
+
+      mesh.castShadow = false
+      mesh.receiveShadow = false
+      mesh.material = wireMaterial
+    })
+
+    return () => {
+      wireMaterial.dispose()
+      wireframeMaterialRef.current = null
+    }
+  }, [exteriorModel])
 
   useFrame((state) => {
     const progress = progressRef.current
-    const intro = sectionProgress(progress, 0, 0.16)
     const phase2 = sectionProgress(progress, 0.16, 0.34)
-    const phase3 = sectionProgress(progress, 0.34, 0.5)
-    const phase4 = sectionProgress(progress, 0.5, 0.62)
     const phase6 = sectionProgress(progress, 0.62, 0.76)
     const phase7 = sectionProgress(progress, 0.76, 0.84)
     const phase8 = sectionProgress(progress, 0.84, 0.92)
     const phase9 = sectionProgress(progress, 0.92, 1)
 
-    const exteriorOpacity = clamp01(Math.max(1 - intro, phase2))
-    const blueprintOpacity = clamp01(intro * (1 - phase2 * 0.9))
-
     if (houseRef.current) {
-      houseRef.current.position.y = -1.28
+      houseRef.current.position.set(0, 0, 0)
     }
 
     if (exteriorRef.current) {
-      const buildScale = progress < 0.16 ? 1 : Math.max(0.08, phase2)
-      exteriorRef.current.scale.set(1, buildScale, 1)
-      exteriorRef.current.position.y = (1 - exteriorOpacity) * 0.22
+      exteriorRef.current.position.set(0, 0, 0)
+      exteriorRef.current.scale.set(1, 1, 1)
     }
 
-    if (shellMaterialRef.current) shellMaterialRef.current.opacity = exteriorOpacity
-    if (rightWingMaterialRef.current) rightWingMaterialRef.current.opacity = exteriorOpacity
-    if (leftWingMaterialRef.current) leftWingMaterialRef.current.opacity = exteriorOpacity
-    if (roofMaterialRef.current) roofMaterialRef.current.opacity = exteriorOpacity
-    if (glassMaterialRef.current) glassMaterialRef.current.opacity = exteriorOpacity * 0.95
-
-    if (blueprintRef.current) {
-      blueprintRef.current.position.y = -1.32
-      blueprintRef.current.scale.setScalar(0.9 + blueprintOpacity * 0.1)
-    }
-    if (blueprintMaterialRef.current) {
-      blueprintMaterialRef.current.opacity = blueprintOpacity
-      blueprintMaterialRef.current.needsUpdate = true
-    }
-    if (blueprintFloorMaterialRef.current) {
-      blueprintFloorMaterialRef.current.opacity = blueprintOpacity * 0.55
-      blueprintFloorMaterialRef.current.needsUpdate = true
-    }
-
-    if (landscapeRef.current) {
-      const landscapeScale = Math.max(0.01, phase3)
-      landscapeRef.current.scale.setScalar(landscapeScale)
-      landscapeRef.current.position.y = -0.3 + phase3 * 0.24
-    }
-
-    if (interiorRef.current) {
-      const interiorScale = Math.max(0.01, phase6)
-      interiorRef.current.scale.setScalar(interiorScale)
-      interiorRef.current.position.y = 0.25 + phase6 * 0.35
-    }
-    if (interiorFloorMaterialRef.current) interiorFloorMaterialRef.current.opacity = clamp01(phase6)
-    if (interiorCeilingMaterialRef.current)
-      interiorCeilingMaterialRef.current.opacity = clamp01(phase6 * 0.8)
-
-    if (productRef.current) {
-      const productVisibility = clamp01(phase7 * 1.2 + phase8 * 0.6)
-      productRef.current.scale.setScalar(0.16 + productVisibility * 1.04)
-      productRef.current.rotation.y += 0.01 + phase8 * 0.025
-    }
-
-    if (productMaterialRef.current) {
-      productMaterialRef.current.emissiveIntensity = phase7 * 0.8
+    if (wireframeMaterialRef.current) {
+      wireframeMaterialRef.current.opacity = 1
+      wireframeMaterialRef.current.needsUpdate = true
     }
 
     if (progress < 0.34) {
@@ -189,145 +172,10 @@ const HouseScene: React.FC<SceneProps> = ({ progressRef }) => {
       <pointLight intensity={0.6} position={[-6, 4, 8]} color="#76d7ff" />
       <Environment preset="city" />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.25, 0]} receiveShadow>
-        <planeGeometry args={[28, 28]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.95} metalness={0.05} />
-      </mesh>
-
-      <group ref={houseRef} position={[0, -0.95, 0]}>
-        <group ref={blueprintRef}>
-          <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[8.6, 6.6]} />
-            <meshBasicMaterial
-              ref={blueprintFloorMaterialRef}
-              color="#78b8cf"
-              transparent
-              opacity={0}
-            />
-          </mesh>
-          <mesh position={[0, 1.85, 0]}>
-            <boxGeometry args={[4.5, 3.35, 4]} />
-            <meshBasicMaterial
-              ref={blueprintMaterialRef}
-              color="#4ea0be"
-              transparent
-              opacity={0}
-              wireframe
-            />
-          </mesh>
-        </group>
-
+      <group ref={houseRef} position={[0, 0, 0]}>
         <group ref={exteriorRef}>
-          <mesh position={[0, 1.58, 0]} castShadow>
-            <boxGeometry args={[4.25, 3.16, 3.6]} />
-            <meshStandardMaterial
-              ref={shellMaterialRef}
-              color="#d8d4cb"
-              roughness={0.6}
-              metalness={0.08}
-              transparent
-              opacity={1}
-            />
-          </mesh>
-          <mesh position={[2.95, 0.95, 0.15]} castShadow>
-            <boxGeometry args={[2.1, 1.9, 2.5]} />
-            <meshStandardMaterial
-              ref={rightWingMaterialRef}
-              color="#c98254"
-              roughness={0.65}
-              metalness={0.06}
-              transparent
-              opacity={1}
-            />
-          </mesh>
-          <mesh position={[-2.75, 0.95, 0.2]} castShadow>
-            <boxGeometry args={[1.95, 1.9, 2.6]} />
-            <meshStandardMaterial
-              ref={leftWingMaterialRef}
-              color="#b6b0a6"
-              roughness={0.63}
-              metalness={0.05}
-              transparent
-              opacity={1}
-            />
-          </mesh>
-          <mesh position={[0.2, 3.22, 0]}>
-            <boxGeometry args={[4.5, 0.12, 4]} />
-            <meshStandardMaterial
-              ref={roofMaterialRef}
-              color="#45484f"
-              roughness={0.8}
-              metalness={0.15}
-              transparent
-              opacity={1}
-            />
-          </mesh>
-          <mesh position={[0, 1.55, 1.82]}>
-            <planeGeometry args={[3.6, 2.5]} />
-            <meshStandardMaterial
-              ref={glassMaterialRef}
-              color="#9ec6d8"
-              roughness={0.1}
-              metalness={0.3}
-              transparent
-              opacity={0.78}
-            />
-          </mesh>
+          <primitive object={exteriorModel.clone} scale={exteriorModel.scale} />
         </group>
-
-        <group ref={landscapeRef}>
-          <mesh position={[-4, 0.35, -3]}>
-            <coneGeometry args={[0.5, 1.2, 12]} />
-            <meshStandardMaterial color="#4ca66d" roughness={0.9} />
-          </mesh>
-          <mesh position={[-2.8, 0.35, -3.5]}>
-            <coneGeometry args={[0.45, 1, 12]} />
-            <meshStandardMaterial color="#5bbb73" roughness={0.9} />
-          </mesh>
-          <mesh position={[3.7, 0.3, -3.2]}>
-            <coneGeometry args={[0.55, 1.4, 12]} />
-            <meshStandardMaterial color="#4a9b67" roughness={0.9} />
-          </mesh>
-          <mesh position={[0, 0.03, 4.6]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[3.8, 1.9]} />
-            <meshStandardMaterial color="#dadde1" roughness={0.95} />
-          </mesh>
-        </group>
-
-        <group ref={interiorRef} position={[-2.1, 1, -1]}>
-          <mesh position={[0, 0.6, 0]}>
-            <boxGeometry args={[2.2, 1.2, 1.4]} />
-            <meshStandardMaterial
-              ref={interiorFloorMaterialRef}
-              color="#efebe5"
-              roughness={0.55}
-              transparent
-              opacity={0}
-            />
-          </mesh>
-          <mesh position={[0, 1.35, -0.6]}>
-            <boxGeometry args={[2.2, 0.06, 1.4]} />
-            <meshStandardMaterial
-              ref={interiorCeilingMaterialRef}
-              color="#baad9b"
-              roughness={0.85}
-              transparent
-              opacity={0}
-            />
-          </mesh>
-        </group>
-
-        <mesh ref={productRef} position={[-2.1, 1.15, -1]} castShadow>
-          <icosahedronGeometry args={[0.38, 0]} />
-          <meshStandardMaterial
-            ref={productMaterialRef}
-            color="#d7c7a0"
-            emissive="#fff1cc"
-            emissiveIntensity={0}
-            roughness={0.2}
-            metalness={0.78}
-          />
-        </mesh>
       </group>
     </>
   )
@@ -393,7 +241,9 @@ export const LandingExperience: React.FC<LandingExperienceProps> = ({
     <div className="landing-root relative min-h-[600vh] text-slate-900" ref={pageRef}>
       <div className="pointer-events-none fixed inset-0 -z-10">
         <Canvas camera={{ fov: 44, position: [0.25, 2.25, 13.3] }} dpr={[1, 1.5]}>
-          <HouseScene progressRef={progressRef} />
+          <React.Suspense fallback={null}>
+            <HouseScene progressRef={progressRef} />
+          </React.Suspense>
         </Canvas>
       </div>
 
@@ -523,3 +373,5 @@ export const LandingExperience: React.FC<LandingExperienceProps> = ({
     </div>
   )
 }
+
+useGLTF.preload('/model.glb')
