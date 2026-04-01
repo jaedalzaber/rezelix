@@ -334,8 +334,3 @@ Payload should manage the content that changes without code deployments.
 - The site has a polished ending with a clear inquiry CTA.
 
 
-pnpm install gsap @gsap/react
-pnpm install zustand
-pnpm install lenis
-pnpm install @react-three/postprocessing
-pnpm install camera-controls

@@ -1,5 +1,5 @@
 import type { StaticImageData } from 'next/image'
-import type { ElementType, Ref } from 'react'
+import type { Ref } from 'react'
 
 import type { Media as MediaType } from '@/payload-types'
 
@@ -7,7 +7,7 @@ export interface Props {
   alt?: string
   className?: string
   fill?: boolean // for NextImage only
-  htmlElement?: ElementType | null
+  htmlElement?: keyof HTMLElementTagNameMap | null
   pictureClassName?: string
   imgClassName?: string
   onClick?: () => void

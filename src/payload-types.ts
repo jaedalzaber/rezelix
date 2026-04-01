@@ -112,10 +112,12 @@ export interface Config {
   globals: {
     header: Header;
     footer: Footer;
+    landingPage: LandingPage;
   };
   globalsSelect: {
     header: HeaderSelect<false> | HeaderSelect<true>;
     footer: FooterSelect<false> | FooterSelect<true>;
+    landingPage: LandingPageSelect<false> | LandingPageSelect<true>;
   };
   locale: null;
   widgets: {
@@ -1691,6 +1693,19 @@ export interface Footer {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "landingPage".
+ */
+export interface LandingPage {
+  id: number;
+  heroTitle: string;
+  heroSubtitle: string;
+  heroCtaLabel: string;
+  heroCtaHref: string;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "header_select".
  */
 export interface HeaderSelect<T extends boolean = true> {
@@ -1731,6 +1746,19 @@ export interface FooterSelect<T extends boolean = true> {
             };
         id?: T;
       };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "landingPage_select".
+ */
+export interface LandingPageSelect<T extends boolean = true> {
+  heroTitle?: T;
+  heroSubtitle?: T;
+  heroCtaLabel?: T;
+  heroCtaHref?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

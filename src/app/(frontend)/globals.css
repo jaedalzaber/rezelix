@@ -222,3 +222,12 @@ html[data-theme='dark'],
 html[data-theme='light'] {
   opacity: initial;
 }
+
+body:has(.landing-root) > header.container,
+body:has(.landing-root) > footer {
+  display: none;
+}
+
+body:has(.landing-root) {
+  overflow-x: hidden;
+}
